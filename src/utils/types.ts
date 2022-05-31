@@ -1,0 +1,1 @@
+export type Otionals<T extends object> = T;

@@ -1,0 +1,185 @@
+<html>
+
+<style>
+    html,
+    body {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        box-sizing: border-box;
+    }
+
+    body {
+        position: relative;
+    }
+
+    #cvsMain {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+    }
+</style>
+
+<body>
+    <canvas id="cvsMain"></canvas>
+</body>
+
+<script>
+    const canvas = document.getElementById('cvsMain');
+
+    function randInt(min, max) {
+        return Math.floor(Math.random() * (max - min) + min);
+    }
+
+    function rand(min, max) {
+        return Math.random() * (max - min) + min;
+    }
+
+    const plant = {
+        body: {
+            type: 'branch',
+            angle: 0.02 * Math.PI,
+            length: 100,
+            duration: 10,
+            next: [
+                {
+                    type: 'branch',
+                    angle: -rand(0.02, 0.04) * Math.PI,
+                    length: rand(70, 90),
+                    duration: rand(5, 15),
+                    next: [
+                        {
+                            type: 'branch',
+                            angle: rand(-0.1, 0.3) * Math.PI,
+                            length: rand(60, 80),
+                            duration: 10,
+                            next: [
+                                {
+                                    type: 'flower',
+                                    duration: rand(5, 15),
+                                    angle: rand(0.02, 0.04) * Math.PI,
+                                    count: randInt(5,15),
+                                    samples: 128,
+                                    curve: "sin(3 * r) + 0.1 * sin(20 * r)",
+                                    outterRadius: rand(40, 50),
+                                    innerRadius: rand(10, 20),
+                                },
+                            ],
+                        },
+                        {
+                            type: 'branch',
+                            angle: rand(-0.1, 0.3) * Math.PI,
+                            length: rand(30, 50),
+                            duration: rand(5, 15),
+                            next: [
+                                {
+                                    type: 'flower',
+                                    duration: rand(5, 15),
+                                    angle: 0.04 * Math.PI,
+                                    count: randInt(15,25),
+                                    samples: 64,
+                                    curve: "sin(5 * r)",
+                                    outterRadius: rand(30, 40),
+                                    innerRadius: rand(10, 20),
+                                },
+                            ],
+                        },
+                    ],
+                },
+            ],
+        },
+    };
+
+    function draw(plant, age) {
+        const { width, height } = canvas.getBoundingClientRect();
+        canvas.width = width;
+        canvas.height = height;
+        const g = canvas.getContext('2d');
+
+        g.clearRect(0, 0, width, height);
+
+        const queue = [[plant.body, 0, { x: width / 2, y: height / 2 }]];
+        while (queue.length) {
+            const [part, acc, { x, y }] = queue.shift();
+            let ratio = Math.min((age - acc) / part.duration, 1);
+            if (ratio <= 0) continue;
+
+            ratio = growEase(ratio);
+
+            //draw
+            if (part.type === 'branch') {
+                g.strokeStyle = '#000000';
+                g.lineWidth = 5;
+                const angle = part.angle - Math.PI / 2;
+                const nextX = x + part.length * ratio * Math.cos(angle);
+                const nextY = y + part.length * ratio * Math.sin(angle);
+
+                g.beginPath();
+                g.moveTo(x, y);
+                g.lineTo(nextX, nextY);
+                g.stroke();
+
+                const nextAcc = acc + part.duration;
+                const nextCoord = { x: nextX, y: nextY };
+                part.next.forEach(p => queue.push([p, nextAcc, nextCoord]));
+            } else if (part.type === 'flower') {
+                g.fillStyle = '#808080';
+                g.strokeStyle = '#000000';
+                g.lineWidth = 1;
+                const curve = makeCurve(part.curve);
+                const samplePoints = Array(part.samples).fill(0).map((_, i) => i * (2 * Math.PI) / part.samples - Math.PI).map(a => [a, Math.max(0, curve(a))]);
+                for (let i = 0; i < part.count; i++) {
+                    g.beginPath();
+                    g.moveTo(x, y);
+                    for (const [spa, spr] of samplePoints) {
+                        const a = part.angle + i * (2 * Math.PI) / part.count + spa;
+                        const px = x + part.outterRadius * ratio * spr * Math.cos(a);
+                        const py = y + part.outterRadius * ratio * spr * Math.sin(a);
+                        g.lineTo(px, py);
+                    }
+                    g.closePath();
+                    g.fill();
+                    g.stroke();
+                }
+                g.beginPath();
+                g.arc(x, y, part.innerRadius * ratio, 0, 2 * Math.PI);
+                g.closePath();
+                g.fill();
+                g.stroke();
+            }
+        }
+    }
+
+    // 0 <= input <= 1
+    function growEase(input) {
+        return Math.sin(input * Math.PI / 2);
+    }
+
+    const funcs = [
+        ['sin', Math.sin],
+        ['cos', Math.cos],
+        ['tan', Math.tan],
+        ['max', Math.max],
+        ['min', Math.min],
+    ];
+
+    function makeCurve(txt) {
+        const fn = new Function(...funcs.map(it => it[0]), 'r', 'return ' + txt);
+        return (...args) => fn(...funcs.map(it => it[1]), ...args);
+    }
+
+    let age = 0;
+    function loop() {
+        requestAnimationFrame(loop);
+        age += 0.05;
+        draw(plant, age);
+    }
+
+    loop();
+    // draw(plant, 100000);
+
+</script>
+
+</html>
